@@ -19,39 +19,42 @@ df = load_df()
 # MULTI-SELECT SLICERS (SYNCED)
 # - Empty selection = "All"
 # ===============================
-brand_all = sorted(df["Brand"].dropna().unique().tolist())
-brands = st.multiselect("Brand(s)", brand_all, key="brands")
+with st.sidebar:
+    st.header("Filters")
 
-# Models depend on selected brands
-if brands:
-    model_all = sorted(
-        df.loc[df["Brand"].isin(brands), "Model"].dropna().unique().tolist()
-    )
-else:
-    model_all = sorted(df["Model"].dropna().unique().tolist())
+    brand_all = sorted(df["Brand"].dropna().unique().tolist())
+    brands = st.multiselect("Brand(s)", brand_all, key="brands")
 
-# Reset models if they contain values not valid under current brand selection
-if "models" not in st.session_state:
-    st.session_state.models = []
-st.session_state.models = [m for m in st.session_state.models if m in model_all]
+    # Models depend on selected brands
+    if brands:
+        model_all = sorted(
+            df.loc[df["Brand"].isin(brands), "Model"].dropna().unique().tolist()
+        )
+    else:
+        model_all = sorted(df["Model"].dropna().unique().tolist())
 
-models = st.multiselect("Model(s)", model_all, key="models")
+    # Reset models if they contain values not valid under current brand selection
+    if "models" not in st.session_state:
+        st.session_state.models = []
+    st.session_state.models = [m for m in st.session_state.models if m in model_all]
 
-# Years depend on selected brands + models
-tmp = df
-if brands:
-    tmp = tmp[tmp["Brand"].isin(brands)]
-if models:
-    tmp = tmp[tmp["Model"].isin(models)]
+    models = st.multiselect("Model(s)", model_all, key="models")
 
-year_all = sorted(tmp["Year"].dropna().unique().tolist())
+    # Years depend on selected brands + models
+    tmp = df
+    if brands:
+        tmp = tmp[tmp["Brand"].isin(brands)]
+    if models:
+        tmp = tmp[tmp["Model"].isin(models)]
 
-# Reset years if they contain values not valid under current selections
-if "years" not in st.session_state:
-    st.session_state.years = []
-st.session_state.years = [y for y in st.session_state.years if y in year_all]
+    year_all = sorted(tmp["Year"].dropna().unique().tolist())
 
-years = st.multiselect("Year(s)", year_all, key="years")
+    # Reset years if they contain values not valid under current selections
+    if "years" not in st.session_state:
+        st.session_state.years = []
+    st.session_state.years = [y for y in st.session_state.years if y in year_all]
+
+    years = st.multiselect("Year(s)", year_all, key="years")
 
 # ===============================
 # APPLY FILTERS
@@ -65,6 +68,33 @@ if years:
     filtered = filtered[filtered["Year"].isin(years)]
 
 # ===============================
+# FILTERED SUMMARY (KPIs)
+# ===============================
+st.markdown("### Vehicle Pricing Summary")
+c1, c2, c3, c4 = st.columns(4)
+
+c1.metric("Total Vehicles", f"{len(filtered):,}")
+
+c2.metric(
+    "Minimum Price",
+    f"${filtered['Price'].min():,.0f}" if len(filtered) else "—"
+)
+
+c3.metric(
+    "Median Price",
+    f"${filtered['Price'].median():,.0f}" if len(filtered) else "—"
+)
+
+c4.metric(
+    "Max Price",
+    f"${filtered['Price'].max():,.0f}" if len(filtered) else "—"
+)
+
+if filtered.empty:
+    st.warning("No rows match the current filters. Try removing one filter.")
+    st.stop()
+
+# ===============================
 # CHARTS
 # ===============================
 brand_count_plot = (
@@ -76,7 +106,7 @@ brand_count_plot = (
         color=alt.Color("Brand:N", title="Brand"),
         tooltip=["Year:O", "Brand:N", "count():Q"],
     )
-    .properties(height=300)
+    .properties(height=300, title="Vehicle Count by Model Year (Colored by Brand)")
 )
 
 detailed_dist = (
@@ -86,9 +116,9 @@ detailed_dist = (
         x=alt.X("Model:N", title="Vehicle Model", axis=alt.Axis(labelAngle=-45, labelLimit=120)),
         y=alt.Y("Price:Q", title="Price ($)"),
         color=alt.Color("Model:N", legend=None),
-        tooltip=["Brand:N", "Year:O", "Model:N", "Price:Q"],
+        tooltip=["Brand:N", "Year:O", "Model:N", alt.Tooltip("Price:Q", format=",.0f")],
     )
-    .properties(height=300)
+    .properties(height=300, title="Price Distribution by Model (Boxplot)")
 )
 
 yearly_uplift = (
@@ -96,10 +126,13 @@ yearly_uplift = (
     .transform_aggregate(median_price="median(Price)", groupby=["Year"])
     .transform_window(
         baseline_price="first_value(median_price)",
-        sort=[alt.SortField("Year", order="ascending")]
+        sort=[alt.SortField("Year", order="ascending")],
     )
     .transform_calculate(
-        pct_diff_vs_baseline="(datum.median_price - datum.baseline_price) / datum.baseline_price * 100"
+        pct_diff_vs_baseline="""
+        datum.baseline_price == 0 ? 0 :
+        (datum.median_price - datum.baseline_price) / datum.baseline_price * 100
+        """
     )
 )
 
@@ -111,7 +144,7 @@ uplift_chart = (
         y=alt.Y(
             "pct_diff_vs_baseline:Q",
             title="% Difference vs Oldest Model Year",
-            axis=alt.Axis(format=".1f")
+            axis=alt.Axis(format=".1f"),
         ),
         color=alt.Color(
             "pct_diff_vs_baseline:Q",
@@ -129,7 +162,7 @@ uplift_chart = (
         title={
             "text": "Median Price Difference by Model Year",
             "subtitle": "Baseline = median price of the oldest model year after filters",
-        }
+        },
     )
 )
 
@@ -139,5 +172,4 @@ dashboard = alt.vconcat(
     uplift_chart
 ).resolve_scale(color="independent")
 
-st.altair_chart(dashboard, use_container_width=True)
-
+st.altair_chart(dashboard, width="stretch")
