@@ -2,16 +2,13 @@ import streamlit as st
 import pandas as pd
 import os
 import altair as alt
-import kagglehub
 
 st.set_page_config(layout="wide")
 st.title("Vehicle Price Dashboard")
 
 @st.cache_data
 def load_df():
-    path = kagglehub.dataset_download("ayeshasiddiqa123/cars-pre")
-    csv_path = os.path.join(path, "car_price_prediction_.csv")
-    return pd.read_csv(csv_path)
+    return pd.read_csv("data/car_price_prediction_.csv")
 
 df = load_df()
 
