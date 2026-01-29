@@ -258,11 +258,22 @@ else:
     if use_quantiles:
         # 10 quantile buckets
         try:
-            mileage_df["Mileage_Bucket"] = pd.qcut(
+            q = pd.qcut(mileage_df["Mileage"], q=10, duplicates="drop")
+
+            # Build rounded, readable labels (e.g., 12k–23k)
+            bins = q.cat.categories
+            labels = [
+                f"{int(round(b.left, -3))//1000}k–{int(round(b.right, -3))//1000}k"
+                for b in bins
+            ]
+
+            mileage_df["Mileage_Bucket"] = pd.cut(
                 mileage_df["Mileage"],
-                q=10,
-                duplicates="drop",
-            ).astype(str)
+                bins=[b.left for b in bins] + [bins[-1].right],
+                labels=labels,
+                include_lowest=True,
+            )
+
         except ValueError:
             # Fallback if too few unique mileage values
             use_quantiles = False
@@ -296,7 +307,7 @@ else:
     if not use_quantiles:
         bucket_order = labels
     else:
-        bucket_order = agg["Mileage_Bucket"].tolist()
+        bucket_order = labels
 
     mileage_price_chart = (
         alt.Chart(agg)
