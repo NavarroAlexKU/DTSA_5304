@@ -4,7 +4,7 @@ import os
 import altair as alt
 
 st.set_page_config(layout="wide")
-st.title("Vehicle Price Dashboard")
+st.title("Vehicle Pricing Dashboard")
 
 @st.cache_data
 def load_df():
